@@ -387,6 +387,12 @@
 "Right fan" = "Δεξιά"; // gemma4:31b
 "Fastest fan" = "Ταχύτερος"; // translategemma:4b
 "Sensor to show" = "Αισθητήρας προς εμφάνιση"; // gemma4:31b
+"Fan curve" = "Fan curve";
+"Control this fan with a curve" = "Control this fan with a curve";
+"Control these fans with a curve" = "Control these fans with a curve";
+"Temperature sensor" = "Temperature sensor";
+"Drag the points to set a fan speed for a temperature" = "Drag the points to set a fan speed for a temperature";
+"Reset to default" = "Reset to default";
 
 // Network
 "Uploading" = "Μεταφόρτωση";

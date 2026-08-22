@@ -387,6 +387,12 @@
 "Right fan" = "Droite";
 "Fastest fan" = "Le plus rapide";
 "Sensor to show" = "Capteur à afficher"; // gemma4:31b
+"Fan curve" = "Fan curve";
+"Control this fan with a curve" = "Control this fan with a curve";
+"Control these fans with a curve" = "Control these fans with a curve";
+"Temperature sensor" = "Temperature sensor";
+"Drag the points to set a fan speed for a temperature" = "Drag the points to set a fan speed for a temperature";
+"Reset to default" = "Reset to default";
 
 // Network
 "Uploading" = "Envoi";

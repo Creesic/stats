@@ -387,6 +387,12 @@
 "Right fan" = "오른쪽 팬";
 "Fastest fan" = "가장 빠른 팬";
 "Sensor to show" = "표시할 센서";
+"Fan curve" = "Fan curve";
+"Control this fan with a curve" = "Control this fan with a curve";
+"Control these fans with a curve" = "Control these fans with a curve";
+"Temperature sensor" = "Temperature sensor";
+"Drag the points to set a fan speed for a temperature" = "Drag the points to set a fan speed for a temperature";
+"Reset to default" = "Reset to default";
 
 // Network
 "Uploading" = "업로드";

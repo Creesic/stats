@@ -126,6 +126,7 @@ public class Sensors: Module {
         self.popupView.usageCallback(value.sensors)
         self.portalView.usageCallback(value.sensors)
         self.notificationsView.usageCallback(value.sensors)
+        self.settingsView.usageCallback(value.sensors)
         
         if self.readerIsLive {
             FanCurveController.shared.tick(value.sensors)

@@ -387,6 +387,12 @@
 "Right fan" = "右侧风扇";
 "Fastest fan" = "最高转速风扇";
 "Sensor to show" = "要显示的传感器";
+"Fan curve" = "Fan curve";
+"Control this fan with a curve" = "Control this fan with a curve";
+"Control these fans with a curve" = "Control these fans with a curve";
+"Temperature sensor" = "Temperature sensor";
+"Drag the points to set a fan speed for a temperature" = "Drag the points to set a fan speed for a temperature";
+"Reset to default" = "Reset to default";
 
 // Network
 "Uploading" = "上传";

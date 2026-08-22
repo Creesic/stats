@@ -387,6 +387,12 @@
 "Right fan" = "Højre"; // gemma4:31b
 "Fastest fan" = "Hurtigste"; // gemma4:31b
 "Sensor to show" = "Sensor der skal vises"; // gemma4:31b
+"Fan curve" = "Fan curve";
+"Control this fan with a curve" = "Control this fan with a curve";
+"Control these fans with a curve" = "Control these fans with a curve";
+"Temperature sensor" = "Temperature sensor";
+"Drag the points to set a fan speed for a temperature" = "Drag the points to set a fan speed for a temperature";
+"Reset to default" = "Reset to default";
 "Celsius" = "Celsius";
 "Uploading" = "Upload";
 "Uploading" = "Upload";
