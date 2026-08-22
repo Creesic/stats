@@ -286,3 +286,295 @@ internal final class FanCurveController {
         }
     }
 }
+
+// MARK: - Chart
+
+internal class FanCurveChart: NSView {
+    private let padding: NSEdgeInsets = NSEdgeInsets(top: 12, left: 38, bottom: 20, right: 14)
+    private let handle: CGFloat = 4.5
+    private let grab: CGFloat = 12
+    private let height: CGFloat = 168
+    
+    private var curve: FanCurve
+    private var floorPercentage: Double
+    private var dragging: Int?
+    private var live: Double?
+    
+    internal var callback: (FanCurve) -> Void = { _ in }
+    internal var active: Bool = false {
+        didSet {
+            guard self.active != oldValue else { return }
+            if !self.active {
+                self.dragging = nil
+            }
+            self.needsDisplay = true
+        }
+    }
+    
+    internal init(curve: FanCurve, floorPercentage: Double) {
+        self.curve = curve
+        self.floorPercentage = floorPercentage
+        
+        super.init(frame: NSRect(x: 0, y: 0, width: 400, height: 168))
+        
+        self.wantsLayer = true
+        self.heightAnchor.constraint(equalToConstant: self.height).isActive = true
+        self.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        self.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    internal func setCurve(_ curve: FanCurve) {
+        guard self.dragging == nil, self.curve != curve else { return }
+        self.curve = curve
+        self.needsDisplay = true
+    }
+    
+    internal func setFloor(_ percentage: Double) {
+        guard self.floorPercentage != percentage else { return }
+        self.floorPercentage = percentage
+        self.needsDisplay = true
+    }
+    
+    internal func setLive(_ temperature: Double?) {
+        guard self.live != temperature else { return }
+        self.live = temperature
+        self.needsDisplay = true
+    }
+    
+    // MARK: - geometry
+    
+    private var plot: NSRect {
+        NSRect(
+            x: self.padding.left,
+            y: self.padding.bottom,
+            width: max(self.bounds.width - self.padding.left - self.padding.right, 1),
+            height: max(self.bounds.height - self.padding.top - self.padding.bottom, 1)
+        )
+    }
+    
+    private func position(_ point: FanCurvePoint) -> CGPoint {
+        CGPoint(x: self.x(point.temperature), y: self.y(point.percentage))
+    }
+    
+    private func x(_ temperature: Double) -> CGFloat {
+        let span = FanCurve.maxTemperature - FanCurve.minTemperature
+        let ratio = (temperature.clampedTo(FanCurve.minTemperature, FanCurve.maxTemperature) - FanCurve.minTemperature) / span
+        return self.plot.minX + self.plot.width * CGFloat(ratio)
+    }
+    
+    private func y(_ percentage: Double) -> CGFloat {
+        self.plot.minY + self.plot.height * CGFloat(percentage.clampedTo(0, 100) / 100)
+    }
+    
+    private func value(_ point: CGPoint) -> FanCurvePoint {
+        let plot = self.plot
+        let span = FanCurve.maxTemperature - FanCurve.minTemperature
+        return FanCurvePoint(
+            temperature: FanCurve.minTemperature + span * Double((point.x - plot.minX) / plot.width),
+            percentage: Double((point.y - plot.minY) / plot.height) * 100
+        )
+    }
+    
+    private func nearest(_ point: CGPoint) -> Int? {
+        var found: (index: Int, distance: CGFloat)?
+        for (i, p) in self.curve.points.enumerated() {
+            let position = self.position(p)
+            let distance = hypot(position.x - point.x, position.y - point.y)
+            guard distance <= self.grab else { continue }
+            if found == nil || distance < found!.distance {
+                found = (i, distance)
+            }
+        }
+        return found?.index
+    }
+}
+
+// MARK: - Chart drawing
+
+extension FanCurveChart {
+    public override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        
+        let plot = self.plot
+        guard plot.width > 1, plot.height > 1 else { return }
+        
+        let accent: NSColor = self.active ? .controlAccentColor : .tertiaryLabelColor
+        let hairline: CGFloat = 1 / (NSScreen.main?.backingScaleFactor ?? 1)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 9, weight: .light),
+            .foregroundColor: NSColor.tertiaryLabelColor
+        ]
+        
+        (isDarkMode ? NSColor.white : NSColor.black).withAlphaComponent(0.03).setFill()
+        NSBezierPath(roundedRect: plot, xRadius: 4, yRadius: 4).fill()
+        
+        (isDarkMode ? NSColor.white : NSColor.black).withAlphaComponent(0.07).setStroke()
+        for step in stride(from: 0.0, through: 100.0, by: 25.0) {
+            let y = self.y(step)
+            let line = NSBezierPath()
+            line.move(to: CGPoint(x: plot.minX, y: y))
+            line.line(to: CGPoint(x: plot.maxX, y: y))
+            line.lineWidth = hairline
+            line.stroke()
+            
+            let label = NSAttributedString(string: "\(Int(step))%", attributes: attributes)
+            label.draw(at: CGPoint(x: plot.minX - label.size().width - 5, y: y - label.size().height/2))
+        }
+        for step in stride(from: FanCurve.minTemperature, through: FanCurve.maxTemperature, by: 20.0) {
+            let x = self.x(step)
+            let line = NSBezierPath()
+            line.move(to: CGPoint(x: x, y: plot.minY))
+            line.line(to: CGPoint(x: x, y: plot.maxY))
+            line.lineWidth = hairline
+            line.stroke()
+            
+            let label = NSAttributedString(string: temperature(step), attributes: attributes)
+            let width = label.size().width
+            label.draw(at: CGPoint(
+                x: (x - width/2).clampedTo(0, max(self.bounds.width - width, 0)),
+                y: plot.minY - label.size().height - 3
+            ))
+        }
+        
+        let points = self.curve.points.map({ self.position($0) })
+        guard let first = points.first, let last = points.last else { return }
+        
+        let line = NSBezierPath()
+        line.move(to: CGPoint(x: plot.minX, y: first.y))
+        points.forEach({ line.line(to: $0) })
+        line.line(to: CGPoint(x: plot.maxX, y: last.y))
+        
+        let fill = line.copy() as! NSBezierPath
+        fill.line(to: CGPoint(x: plot.maxX, y: plot.minY))
+        fill.line(to: CGPoint(x: plot.minX, y: plot.minY))
+        fill.close()
+        accent.withAlphaComponent(0.12).setFill()
+        fill.fill()
+        
+        self.drawFloor(plot, hairline: hairline)
+        
+        accent.setStroke()
+        line.lineWidth = 2
+        line.lineJoinStyle = .round
+        line.stroke()
+        
+        self.drawLive(plot, hairline: hairline)
+        
+        for (i, point) in points.enumerated() {
+            let radius = self.dragging == i ? self.handle + 1.5 : self.handle
+            let path = NSBezierPath(ovalIn: NSRect(
+                x: point.x - radius, y: point.y - radius, width: radius*2, height: radius*2
+            ))
+            (isDarkMode ? NSColor.black : NSColor.white).setFill()
+            path.fill()
+            accent.setStroke()
+            path.lineWidth = 2
+            path.stroke()
+        }
+        
+        if let index = self.dragging, self.curve.points.indices.contains(index) {
+            let point = self.curve.points[index]
+            self.drawReadout(
+                "\(temperature(point.temperature)) · \(Int(point.percentage))%",
+                near: points[index]
+            )
+        }
+    }
+    
+    private func drawFloor(_ plot: NSRect, hairline: CGFloat) {
+        guard self.floorPercentage > 0 else { return }
+        
+        let top = self.y(self.floorPercentage)
+        NSColor.windowBackgroundColor.withAlphaComponent(0.55).setFill()
+        NSBezierPath(rect: NSRect(x: plot.minX, y: plot.minY, width: plot.width, height: top - plot.minY)).fill()
+        
+        let edge = NSBezierPath()
+        edge.move(to: CGPoint(x: plot.minX, y: top))
+        edge.line(to: CGPoint(x: plot.maxX, y: top))
+        edge.lineWidth = hairline * 2
+        edge.setLineDash([2, 2], count: 2, phase: 0)
+        NSColor.tertiaryLabelColor.setStroke()
+        edge.stroke()
+    }
+    
+    private func drawLive(_ plot: NSRect, hairline: CGFloat) {
+        guard let live = self.live else { return }
+        
+        let x = self.x(live)
+        let marker = NSBezierPath()
+        marker.move(to: CGPoint(x: x, y: plot.minY))
+        marker.line(to: CGPoint(x: x, y: plot.maxY))
+        marker.lineWidth = hairline * 2
+        marker.setLineDash([3, 3], count: 2, phase: 0)
+        NSColor.secondaryLabelColor.withAlphaComponent(0.6).setStroke()
+        marker.stroke()
+        
+        let y = self.y(self.curve.percentage(at: live))
+        NSColor.secondaryLabelColor.setFill()
+        NSBezierPath(ovalIn: NSRect(x: x-3, y: y-3, width: 6, height: 6)).fill()
+    }
+    
+    private func drawReadout(_ text: String, near point: CGPoint) {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 10, weight: .medium),
+            .foregroundColor: NSColor.labelColor
+        ]
+        let label = NSAttributedString(string: text, attributes: attributes)
+        let size = label.size()
+        let plot = self.plot
+        
+        var origin = CGPoint(x: point.x - size.width/2, y: point.y + self.handle + 7)
+        origin.x = origin.x.clampedTo(plot.minX + 3, plot.maxX - size.width - 3)
+        if origin.y + size.height + 3 > plot.maxY {
+            origin.y = point.y - self.handle - size.height - 7
+        }
+        
+        let box = NSBezierPath(
+            roundedRect: NSRect(x: origin.x - 4, y: origin.y - 2, width: size.width + 8, height: size.height + 4),
+            xRadius: 3, yRadius: 3
+        )
+        (isDarkMode ? NSColor.black : NSColor.white).withAlphaComponent(0.85).setFill()
+        box.fill()
+        NSColor.separatorColor.setStroke()
+        box.lineWidth = 1 / (NSScreen.main?.backingScaleFactor ?? 1)
+        box.stroke()
+        
+        label.draw(at: origin)
+    }
+}
+
+// MARK: - Chart interaction
+
+extension FanCurveChart {
+    public override func mouseDown(with event: NSEvent) {
+        guard self.active else { return }
+        self.dragging = self.nearest(self.convert(event.locationInWindow, from: nil))
+        self.needsDisplay = true
+    }
+    
+    public override func mouseDragged(with event: NSEvent) {
+        guard self.active, let index = self.dragging, self.curve.points.indices.contains(index) else { return }
+        
+        var point = self.value(self.convert(event.locationInWindow, from: nil))
+        
+        let lower = index > 0 ? self.curve.points[index-1].temperature + 1 : FanCurve.minTemperature
+        let upper = index < self.curve.points.count-1 ? self.curve.points[index+1].temperature - 1 : FanCurve.maxTemperature
+        point.temperature = point.temperature.rounded().clampedTo(lower, upper)
+        point.percentage = point.percentage.rounded().clampedTo(0, 100)
+        
+        guard self.curve.points[index] != point else { return }
+        self.curve.points[index] = point
+        self.needsDisplay = true
+    }
+    
+    public override func mouseUp(with event: NSEvent) {
+        guard self.dragging != nil else { return }
+        self.dragging = nil
+        self.needsDisplay = true
+        self.callback(self.curve)
+    }
+}
