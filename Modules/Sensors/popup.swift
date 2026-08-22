@@ -67,6 +67,7 @@ internal class Popup: PopupWrapper {
         let fanViews = self.list.values.compactMap { $0 as? FanView }
         guard !fanViews.isEmpty else { return }
         guard fanViews.allSatisfy({ $0.fan.mode.isAutomatic }) else { return }
+        guard !fanViews.contains(where: { FanCurveStore.enabled(FanCurveStore.scope($0.fan.id)) }) else { return }
         SMCHelper.shared.resetFanControl()
     }
     #endif
@@ -613,6 +614,7 @@ internal class FanView: NSStackView {
             height: view.frame.height - 8
         ), mode: self.fan.mode)
         buttons.callback = { [weak self] (mode: FanMode) in
+            self?.releaseFanCurve()
             if let fan = self?.fan, mode == .automatic || fan.mode != mode {
                 self?.fan.mode = mode
                 self?.fan.customMode = mode
@@ -621,6 +623,7 @@ internal class FanView: NSStackView {
             self?.toggleControlView(mode == .forced)
         }
         buttons.off = { [weak self] in
+            self?.releaseFanCurve()
             if let fan = self?.fan {
                 if self?.fan.mode != .forced {
                     self?.fan.mode = .forced
@@ -633,6 +636,7 @@ internal class FanView: NSStackView {
             self?.toggleControlView(false)
         }
         buttons.turbo = { [weak self] in
+            self?.releaseFanCurve()
             if let fan = self?.fan {
                 if self?.fan.mode != .forced {
                     self?.fan.mode = .forced
@@ -759,7 +763,15 @@ internal class FanView: NSStackView {
         self.sizeCallback()
     }
     
+    private func releaseFanCurve() {
+        let scope = FanCurveStore.scope(self.fan.id)
+        guard FanCurveStore.enabled(scope) || FanCurveController.shared.isDriving(self.fan.id) else { return }
+        FanCurveStore.setEnabled(scope, false)
+        FanCurveController.shared.release(self.fan.id)
+    }
+    
     private func setSpeed(value: Int, then: @escaping () -> Void = {}) {
+        self.releaseFanCurve()
         self.sliderValueField?.stringValue = "\(value) RPM"
         self.sliderValueField?.textColor = .secondaryLabelColor
         self.fan.customSpeed = value
