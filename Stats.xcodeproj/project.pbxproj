@@ -211,6 +211,7 @@
 		9AE29AF3249A51D70071B02D /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AE29AF1249A50CD0071B02D /* main.swift */; };
 		9AE29AF6249A52B00071B02D /* config.plist in Resources */ = {isa = PBXBuildFile; fileRef = 9AE29AF4249A52870071B02D /* config.plist */; };
 		9AE29AFB249A53DC0071B02D /* readers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AE29AF9249A53780071B02D /* readers.swift */; };
+		E19DA7A9292E2D95CE26A0E3 /* fanCurve.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B57320E0F0E704A80082465 /* fanCurve.swift */; };
 		9AE29AFC249A53DC0071B02D /* values.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AE29AF7249A53420071B02D /* values.swift */; };
 		9AEBBE4D28D773430082A6A1 /* Dot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AEBBE4C28D773430082A6A1 /* Dot.swift */; };
 		9AF9EE0924648751005D2270 /* Disk.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9AF9EE0224648751005D2270 /* Disk.framework */; };
@@ -759,6 +760,7 @@
 		9AE29AF4249A52870071B02D /* config.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; name = config.plist; path = Modules/Sensors/config.plist; sourceTree = SOURCE_ROOT; };
 		9AE29AF7249A53420071B02D /* values.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = values.swift; path = Modules/Sensors/values.swift; sourceTree = SOURCE_ROOT; };
 		9AE29AF9249A53780071B02D /* readers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = readers.swift; path = Modules/Sensors/readers.swift; sourceTree = SOURCE_ROOT; };
+		5B57320E0F0E704A80082465 /* fanCurve.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = fanCurve.swift; path = Modules/Sensors/fanCurve.swift; sourceTree = SOURCE_ROOT; };
 		9AEBBE4C28D773430082A6A1 /* Dot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dot.swift; sourceTree = "<group>"; };
 		9AF9EE0224648751005D2270 /* Disk.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Disk.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		9AF9EE0524648751005D2270 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -1353,6 +1355,7 @@
 				5CA518372B543FE600EBCCC4 /* portal.swift */,
 				9A58DE9F24B363F300716A9F /* settings.swift */,
 				9AE29AF7249A53420071B02D /* values.swift */,
+				5B57320E0F0E704A80082465 /* fanCurve.swift */,
 				5CF2211A2B1F8CEF006C583F /* notifications.swift */,
 				9AE29AEC249A50960071B02D /* Info.plist */,
 				9AE29AF4249A52870071B02D /* config.plist */,
@@ -2371,6 +2374,7 @@
 				9A46C05F266D85F8001A1117 /* smc.swift in Sources */,
 				9AB6D03926447CAA003215A5 /* reader.m in Sources */,
 				9AE29AFB249A53DC0071B02D /* readers.swift in Sources */,
+				E19DA7A9292E2D95CE26A0E3 /* fanCurve.swift in Sources */,
 				9AE29AFC249A53DC0071B02D /* values.swift in Sources */,
 				9A58DE9E24B363D800716A9F /* popup.swift in Sources */,
 				9AE29AF3249A51D70071B02D /* main.swift in Sources */,
