@@ -24,6 +24,7 @@ public class Sensors: Module {
     }
     
     private var selectedSensor: String
+    private var readerIsLive: Bool = false
     
     public init() {
         self.settingsView = Settings(.sensors)
@@ -85,11 +86,20 @@ public class Sensors: Module {
         }
         
         self.setReaders([self.sensorsReader])
+        self.readerIsLive = true
+        
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(self.moduleToggleListener), name: .toggleModule, object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(self.pauseListener), name: .pause, object: nil
+        )
     }
     
     public override func willTerminate() {
-        guard SMCHelper.shared.isActive(), let reader = self.sensorsReader else { return }
+        FanCurveController.shared.releaseAll()
         
+        guard SMCHelper.shared.isActive(), let reader = self.sensorsReader else { return }
         reader.list.sensors.filter({ $0 is Fan }).forEach { (s: Sensor_p) in
             if let f = s as? Fan, let mode = f.customMode {
                 if !mode.isAutomatic {
@@ -99,6 +109,17 @@ public class Sensors: Module {
         }
     }
     
+    @objc private func moduleToggleListener(_ notification: Notification) {
+        guard let name = notification.userInfo?["module"] as? String, name == self.config.name,
+              let state = notification.userInfo?["state"] as? Bool, !state else { return }
+        FanCurveController.shared.releaseAll()
+    }
+    
+    @objc private func pauseListener(_ notification: Notification) {
+        guard let state = notification.userInfo?["state"] as? Bool, state else { return }
+        FanCurveController.shared.releaseAll()
+    }
+    
     private func usageCallback(_ raw: Sensors_List?) {
         guard let value = raw, self.enabled else { return }
         
@@ -106,8 +127,16 @@ public class Sensors: Module {
         self.portalView.usageCallback(value.sensors)
         self.notificationsView.usageCallback(value.sensors)
         
+        if self.readerIsLive {
+            FanCurveController.shared.tick(value.sensors)
+        }
+        
         let activeWidgets = self.menuBar.widgets.filter{ $0.isActive }
-        self.sensorsReader?.sleepMode(state: activeWidgets.contains(where: {$0.item is Label}) && activeWidgets.count == 1)
+        let curveActive = FanCurveController.controllable(value.sensors)
+            .contains(where: { FanCurveStore.enabled(FanCurveStore.scope($0.id)) })
+        self.sensorsReader?.sleepMode(
+            state: !curveActive && activeWidgets.contains(where: {$0.item is Label}) && activeWidgets.count == 1
+        )
         
         activeWidgets.forEach { (w: SWidget) in
             switch w.item {

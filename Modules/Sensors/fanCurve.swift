@@ -142,3 +142,147 @@ internal enum FanCurveStore {
         }
     }
 }
+
+// MARK: - Controller
+
+internal final class FanCurveController {
+    static let shared = FanCurveController()
+    
+    private struct State {
+        var temperature: Double
+        var speed: Int
+        var ts: TimeInterval
+    }
+    
+    private let deadband: Double = 25
+    private let refresh: TimeInterval = 60
+    private let smoothing: Double = 0.4
+    private static let wakeDelay: TimeInterval = 3
+    
+    private let queue: DispatchQueue = DispatchQueue(label: "eu.exelban.Stats.Sensors.fanCurve")
+    private var state: [Int: State] = [:]
+    private var driven: Set<Int> = []
+    private var asleep: Bool = false
+    
+    private init() {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self, selector: #selector(self.sleepListener), name: NSWorkspace.willSleepNotification, object: nil
+        )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self, selector: #selector(self.wakeListener), name: NSWorkspace.didWakeNotification, object: nil
+        )
+    }
+    
+    internal func tick(_ sensors: [Sensor_p]) {
+        let fans = FanCurveController.controllable(sensors)
+        guard !fans.isEmpty else { return }
+        let enabled = fans.filter({ FanCurveStore.enabled(FanCurveStore.scope($0.id)) })
+        let temperatures = enabled.isEmpty ? [] : sensors.filter({ $0.type == .temperature })
+        
+        self.queue.async { [weak self] in
+            guard let self, !self.asleep else { return }
+            
+            self.handBack(self.driven.subtracting(enabled.map({ $0.id })))
+            
+            guard !enabled.isEmpty, SMCHelper.shared.isInstalled else { return }
+            enabled.forEach { self.apply($0, temperatures) }
+        }
+    }
+    
+    internal func release(_ id: Int) {
+        self.queue.sync {
+            self.state.removeValue(forKey: id)
+            self.driven.remove(id)
+        }
+    }
+    
+    internal func isDriving(_ id: Int) -> Bool {
+        self.queue.sync { self.driven.contains(id) }
+    }
+    
+    internal func resetSmoothing(_ id: Int) {
+        self.queue.async { [weak self] in
+            self?.state.removeValue(forKey: id)
+        }
+    }
+    
+    internal func disable(_ ids: [Int]) {
+        self.queue.async { [weak self] in
+            self?.handBack(Set(ids))
+        }
+    }
+    
+    internal func releaseAll() {
+        self.queue.sync {
+            self.handBack(self.driven)
+        }
+    }
+    
+    private func handBack(_ ids: Set<Int>) {
+        guard !ids.isEmpty else { return }
+        ids.forEach { self.state.removeValue(forKey: $0) }
+        guard SMCHelper.shared.isInstalled else { return }
+        ids.forEach { SMCHelper.shared.setFanMode($0, mode: FanMode.automatic.rawValue) }
+        self.driven.subtract(ids)
+    }
+    
+    internal static func controllable(_ sensors: [Sensor_p]) -> [Fan] {
+        sensors.compactMap({ $0 as? Fan }).filter({
+            !$0.isComputed && $0.id >= 0 && $0.minSpeed >= 0 && $0.maxSpeed > 1 && $0.maxSpeed > $0.minSpeed
+        })
+    }
+    
+    internal static func speed(_ fan: Fan, percentage: Double) -> Int {
+        Int((((fan.maxSpeed * percentage) / 100).clampedTo(fan.minSpeed, fan.maxSpeed)).rounded())
+    }
+    
+    private func apply(_ fan: Fan, _ temperatures: [Sensor_p]) {
+        let scope = FanCurveStore.scope(fan.id)
+        guard FanCurveStore.enabled(scope) else { return }
+        
+        guard let key = FanCurveStore.sensor(scope, in: temperatures),
+              let sensor = temperatures.first(where: { $0.key == key }), sensor.value > 0 else {
+            if self.driven.contains(fan.id) {
+                self.handBack([fan.id])
+            }
+            return
+        }
+        
+        let now = ProcessInfo.processInfo.systemUptime
+        let previous = self.state[fan.id]
+        
+        var temperature = sensor.value
+        if let previous {
+            temperature = previous.temperature + (sensor.value - previous.temperature) * self.smoothing
+        }
+        
+        let speed = FanCurveController.speed(fan, percentage: FanCurveStore.curve(scope).percentage(at: temperature))
+        let moved = previous == nil || abs(Double(speed - (previous?.speed ?? 0))) >= self.deadband
+        let stale = now - (previous?.ts ?? 0) >= self.refresh
+        
+        guard moved || stale else {
+            self.state[fan.id] = State(temperature: temperature, speed: previous?.speed ?? speed, ts: previous?.ts ?? now)
+            return
+        }
+        
+        SMCHelper.shared.setFanMode(fan.id, mode: FanMode.forced.rawValue)
+        SMCHelper.shared.setFanSpeed(fan.id, speed: speed)
+        self.driven.insert(fan.id)
+        self.state[fan.id] = State(temperature: temperature, speed: speed, ts: now)
+    }
+    
+    @objc private func sleepListener() {
+        self.queue.sync {
+            self.asleep = true
+            self.handBack(self.driven)
+        }
+    }
+    
+    @objc private func wakeListener() {
+        self.queue.asyncAfter(deadline: .now() + FanCurveController.wakeDelay) { [weak self] in
+            guard let self else { return }
+            self.state.removeAll()
+            self.asleep = false
+        }
+    }
+}
