@@ -1140,6 +1140,7 @@ public class SMCHelper {
     }
     
     private var connection: NSXPCConnection? = nil
+    private let connectionLock: NSLock = NSLock()
     
     public func setFanSpeed(_ id: Int, speed: Int) {
         guard let helper = self.helper(nil) else { return }
@@ -1164,7 +1165,17 @@ public class SMCHelper {
         helper.resetFanControl { _ in }
     }
     
+    private func invalidateConnection() {
+        self.connectionLock.lock()
+        let current = self.connection
+        self.connection = nil
+        self.connectionLock.unlock()
+        current?.invalidate()
+    }
+    
     public func isActive() -> Bool {
+        self.connectionLock.lock()
+        defer { self.connectionLock.unlock() }
         return self.connection != nil
     }
     
@@ -1248,8 +1259,7 @@ public class SMCHelper {
         guard self.legacyIsInstalled, let helper = self.helper(nil) else { return }
         print("legacy SMC helper detected, removing it before registering the SMAppService daemon")
         helper.uninstall()
-        self.connection?.invalidate()
-        self.connection = nil
+        self.invalidateConnection()
     }
     
     private func installLegacy(completion: @escaping (_ state: SMCHelperInstallState) -> Void) {
@@ -1298,24 +1308,29 @@ public class SMCHelper {
     }
     
     private func helperConnection() -> NSXPCConnection? {
-        guard self.connection == nil else {
-            return self.connection
+        self.connectionLock.lock()
+        if let existing = self.connection {
+            self.connectionLock.unlock()
+            return existing
         }
         
         let connection = NSXPCConnection(machServiceName: "eu.exelban.Stats.SMC.Helper", options: .privileged)
         connection.exportedObject = self
         connection.remoteObjectInterface = NSXPCInterface(with: HelperProtocol.self)
-        connection.invalidationHandler = { [weak self] in
-            self?.connection?.invalidationHandler = nil
-            OperationQueue.main.addOperation { [weak self] in
-                self?.connection = nil
+        connection.invalidationHandler = { [weak self, weak connection] in
+            guard let self else { return }
+            self.connectionLock.lock()
+            if self.connection === connection {
+                self.connection = nil
             }
+            self.connectionLock.unlock()
         }
-        
         self.connection = connection
-        self.connection?.resume()
+        self.connectionLock.unlock()
         
-        return self.connection
+        connection.resume()
+        
+        return connection
     }
     
     private func helper(_ completion: ((Bool) -> Void)?) -> HelperProtocol? {
@@ -1347,8 +1362,7 @@ public class SMCHelper {
             } catch {
                 print("failed to unregister SMC helper daemon: \(error.localizedDescription)")
             }
-            self.connection?.invalidate()
-            self.connection = nil
+            self.invalidateConnection()
             if !silent {
                 NotificationCenter.default.post(name: .fanHelperState, object: nil, userInfo: ["state": false])
             }
